@@ -17,6 +17,8 @@ export interface UploadRow {
 export interface QuestionItem {
   id: number
   maxMarks: number
+  questionText: string
+  page: number
 }
 
 export interface StudentItem {
@@ -29,12 +31,46 @@ export interface StudentItem {
 const ME = 'You'
 
 const uploadRows = ref<UploadRow[]>([])
+
+const sampleQuestions = [
+  'Explain process scheduling in operating systems and compare preemptive and non-preemptive approaches with one practical example.',
+  'Describe deadlock in OS. Explain the four necessary conditions and discuss one prevention strategy suitable for a university lab environment.',
+  'Differentiate paging and segmentation. Which model is easier to manage in large multi-user systems and why?',
+  'What is a file allocation table? Explain contiguous, linked, and indexed allocation with advantages and disadvantages.',
+  'Discuss the producer-consumer problem and show how semaphores can prevent race conditions.',
+  'Explain virtual memory and demand paging. Why is locality of reference important for performance?',
+  'What is thrashing? Describe two indicators and two mitigation techniques used by administrators.',
+  'Explain CPU scheduling metrics such as turnaround time, waiting time, and response time using a small sample workload.',
+  'Describe inter-process communication using shared memory and message passing. When would you prefer each?',
+  'Explain system calls and user mode/kernel mode transitions in modern operating systems.',
+  'Discuss disk scheduling algorithms (FCFS, SSTF, SCAN) and identify which one can cause starvation.',
+  'What are critical sections? Explain mutual exclusion requirements and one software or hardware-based solution.',
+  'Define context switching and describe its overhead in a high-concurrency server.',
+  'Explain the role of an operating system in memory protection and process isolation.',
+  'Describe bootstrapping and the sequence from power-on to loading the operating system kernel.',
+  'What is a shell? Compare command-line shells and graphical shells for administrative tasks.',
+  'Explain inode-based file systems and how metadata is stored and retrieved.',
+  'Discuss concurrency hazards in multi-threaded grading systems and suggest safe coding practices.',
+  'Explain access control in OS using users, groups, and permission bits with an academic portal example.',
+  'What is journaling in file systems and how does it improve crash recovery?',
+]
+
 const sampleMaxMarks = [4, 6, 8, 5, 7, 10, 3, 6, 5, 4, 9, 8, 2, 6, 7, 10, 4, 5, 8, 6]
-const questionPaper = ref<QuestionItem[]>(sampleMaxMarks.map((maxMarks, i) => ({ id: i + 1, maxMarks })))
+const questionPaper = ref<QuestionItem[]>(
+  sampleMaxMarks.map((maxMarks, i) => ({
+    id: i + 1,
+    maxMarks,
+    page: i + 1,
+    questionText: sampleQuestions[i],
+  })),
+)
+
 const students = ref<StudentItem[]>(
   Array.from({ length: 200 }, (_, i) => {
     const id = `STU${String(i + 1).padStart(4, '0')}`
-    const scores = Object.fromEntries(questionPaper.value.map((q) => [q.id, null]))
+    const scores: Record<number, number | null> = Object.fromEntries(
+      questionPaper.value.map((q) => [q.id, null] as const),
+    ) as Record<number, number | null>
 
     if (i % 18 === 0) {
       return { id, status: 'locked_by_other', lockedBy: i % 2 ? 'Evaluator A' : 'Evaluator B', scores }

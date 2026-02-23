@@ -3,9 +3,12 @@ import { computed, ref } from 'vue'
 import Modal from '../common/Modal.vue'
 import { useAssessmentStore } from '../../stores/assessmentStore'
 
+const emit = defineEmits<{ (e: 'go-to-page', page: number): void }>()
+
 const store = useAssessmentStore()
 const showReopenModal = ref(false)
 const fieldErrors = ref<Record<number, string>>({})
+const expanded = ref<Record<number, boolean>>({})
 
 const scoreSummary = computed(() => {
   const student = store.selectedStudent.value
@@ -34,6 +37,10 @@ function handleScoreChange(questionId: number, max: number, value: string) {
   fieldErrors.value[questionId] = ''
   store.setScore(questionId, parsed)
 }
+
+function toggleExpanded(questionId: number) {
+  expanded.value[questionId] = !expanded.value[questionId]
+}
 </script>
 
 <template>
@@ -56,10 +63,14 @@ function handleScoreChange(questionId: number, max: number, value: string) {
     <div v-if="isReadOnly" class="banner warning">Locked by {{ store.selectedStudent.value?.lockedBy }}. View only.</div>
 
     <div class="questions-list">
-      <div v-for="question in store.questionPaper.value" :key="question.id" class="question-card">
-        <div>
+      <div v-for="question in store.questionPaper.value" :key="question.id" class="question-card" @click="emit('go-to-page', question.page)">
+        <div class="question-main">
           <strong>Q{{ question.id }}</strong>
-          <p>Max: {{ question.maxMarks }}</p>
+          <p :class="['question-text', { expanded: expanded[question.id] }]">{{ question.questionText }}</p>
+          <p class="question-meta">Max: {{ question.maxMarks }}</p>
+          <button class="btn-link" type="button" @click.stop="toggleExpanded(question.id)">
+            {{ expanded[question.id] ? 'Show less' : 'Show more' }}
+          </button>
         </div>
         <div>
           <input
@@ -69,6 +80,7 @@ function handleScoreChange(questionId: number, max: number, value: string) {
             :max="question.maxMarks"
             :disabled="!store.selectedStudent.value || isReadOnly"
             :value="store.selectedStudent.value?.scores[question.id] ?? ''"
+            @focus="emit('go-to-page', question.page)"
             @input="handleScoreChange(question.id, question.maxMarks, ($event.target as HTMLInputElement).value)"
           />
           <p v-if="fieldErrors[question.id]" class="inline-error">{{ fieldErrors[question.id] }}</p>
