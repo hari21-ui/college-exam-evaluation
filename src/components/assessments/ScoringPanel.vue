@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref } from 'vue'
 import Modal from '../common/Modal.vue'
 import { useAssessmentStore } from '../../stores/assessmentStore'
 
 const store = useAssessmentStore()
-const showReopenModal = ref(false)
+const showCompleteModal = ref(false)
 const fieldErrors = ref<Record<number, string>>({})
 
 const scoreSummary = computed(() => {
@@ -13,71 +13,107 @@ const scoreSummary = computed(() => {
 
   let total = 0
   let answered = 0
-  for (const question of store.questionPaper.value) {
-    const score = student.scores[question.id]
-    if (typeof score === 'number') {
-      total += score
+  student.questions.forEach((question) => {
+    if (typeof question.awardedMarks === 'number') {
+      total += question.awardedMarks
       answered += 1
     }
-  }
+  })
   return { total, answered }
 })
 
-const isReadOnly = computed(() => store.selectedStudent.value?.status === 'locked_by_other')
+const readOnly = computed(() => {
+  const status = store.selectedStudent.value?.evaluationStatus
+  return status === 'locked_by_other' || status === 'completed'
+})
 
-function handleScoreChange(questionId: number, max: number, value: string) {
+function focusQuestion(questionNo: number) {
+  store.setActiveQuestion(questionNo)
+  nextTick(() => {
+    document.getElementById(`question-${questionNo}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+  })
+}
+
+function moveToNext(questionNo: number) {
+  const next = Math.min(store.questionPaper.value.length, questionNo + 1)
+  focusQuestion(next)
+  const nextEl = document.querySelector<HTMLInputElement>(`#q-input-${next}`)
+  nextEl?.focus()
+}
+
+function commitScore(questionNo: number, max: number, value: string, source: 'enter' | 'blur') {
   const parsed = value === '' ? null : Number(value)
-  if (parsed !== null && parsed > max) {
-    fieldErrors.value[questionId] = `Cannot exceed max ${max}`
+  if (parsed !== null && (Number.isNaN(parsed) || parsed > max)) {
+    fieldErrors.value[questionNo] = `Cannot exceed / ${max}`
     return
   }
-  fieldErrors.value[questionId] = ''
-  store.setScore(questionId, parsed)
+  fieldErrors.value[questionNo] = ''
+  store.setScore(questionNo, parsed)
+  if (source === 'enter' || (source === 'blur' && parsed !== null)) moveToNext(questionNo)
+}
+
+function questionLabel(questionNo: number) {
+  return `Explain the concept for question ${questionNo} with key points and examples.`
 }
 </script>
 
 <template>
   <section class="card scoring-panel">
-    <div class="sticky scoring-header">
+    <div class="scoring-header">
       <h3>Scoring</h3>
       <p>Total Score: {{ scoreSummary.total }}</p>
-      <p>Progress: {{ scoreSummary.answered }}/20</p>
-      <button
-        v-if="store.selectedStudent.value?.status !== 'completed'"
-        class="btn primary"
-        :disabled="!store.selectedStudent.value || isReadOnly"
-        @click="store.markComplete"
-      >
-        Mark as complete
-      </button>
-      <button v-else class="btn secondary" @click="showReopenModal = true">Re-open for edits</button>
+      <p>Progress: {{ scoreSummary.answered }}/{{ store.questionPaper.value.length }}</p>
     </div>
 
-    <div v-if="isReadOnly" class="banner warning">Locked by {{ store.selectedStudent.value?.lockedBy }}. View only.</div>
+    <div class="questions-list" id="scoring-list">
+      <div
+        v-for="question in store.questionPaper.value"
+        :id="`question-${question.questionNo}`"
+        :key="question.questionNo"
+        :class="['question-card', { active: store.activeQuestionNo.value === question.questionNo }]"
+        @click="focusQuestion(question.questionNo)"
+      >
+        <div class="question-row">
+          <span class="subtle-q">Q{{ question.questionNo }}</span>
+          <p class="question-text">{{ questionLabel(question.questionNo) }}</p>
+        </div>
 
-    <div class="questions-list">
-      <div v-for="question in store.questionPaper.value" :key="question.id" class="question-card">
-        <div>
-          <strong>Q{{ question.id }}</strong>
-          <p>Max: {{ question.maxMarks }}</p>
+        <div class="score-row">
+          <label class="marks-input-wrap">
+            <input
+              :id="`q-input-${question.questionNo}`"
+              class="text-input score-cell"
+              type="number"
+              min="0"
+              :max="question.maxMarks"
+              :disabled="!store.selectedStudent.value || readOnly"
+              :value="store.selectedStudent.value?.questions.find((q) => q.questionNo === question.questionNo)?.awardedMarks ?? ''"
+              @focus="focusQuestion(question.questionNo)"
+              @blur="commitScore(question.questionNo, question.maxMarks, ($event.target as HTMLInputElement).value, 'blur')"
+              @keydown.enter.prevent="commitScore(question.questionNo, question.maxMarks, ($event.target as HTMLInputElement).value, 'enter')"
+            />
+            <span class="max-label">/ {{ question.maxMarks }}</span>
+          </label>
         </div>
-        <div>
-          <input
-            class="text-input small"
-            type="number"
-            min="0"
-            :max="question.maxMarks"
-            :disabled="!store.selectedStudent.value || isReadOnly"
-            :value="store.selectedStudent.value?.scores[question.id] ?? ''"
-            @input="handleScoreChange(question.id, question.maxMarks, ($event.target as HTMLInputElement).value)"
-          />
-          <p v-if="fieldErrors[question.id]" class="inline-error">{{ fieldErrors[question.id] }}</p>
-        </div>
+
+        <p v-if="fieldErrors[question.questionNo]" class="inline-error">{{ fieldErrors[question.questionNo] }}</p>
       </div>
     </div>
 
-    <Modal title="Re-open completed evaluation?" :open="showReopenModal" @close="showReopenModal = false" @confirm="store.reopenForEdits(); showReopenModal = false">
-      <p>You're editing a completed evaluation. Edit history will be available in V2. Continue?</p>
+    <div class="sticky-complete">
+      <button class="btn primary" :disabled="!store.selectedStudent.value || readOnly" @click="showCompleteModal = true">Mark as Completed</button>
+    </div>
+
+    <div v-if="store.offlineMode.value" class="floating-save warning">Offline — will sync when online</div>
+    <div v-else-if="store.saveState.visible" class="floating-save">{{ store.saveState.text }}</div>
+
+    <Modal
+      title="Mark evaluation as completed?"
+      :open="showCompleteModal"
+      @close="showCompleteModal = false"
+      @confirm="store.markCompleted(); showCompleteModal = false"
+    >
+      <p>Once marked completed, this evaluation cannot be edited.</p>
     </Modal>
   </section>
 </template>
