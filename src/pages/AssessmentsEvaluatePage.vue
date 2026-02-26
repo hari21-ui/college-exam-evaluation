@@ -7,18 +7,6 @@ import ScoringPanel from '../components/assessments/ScoringPanel.vue'
 import { useAssessmentStore } from '../stores/assessmentStore'
 
 const store = useAssessmentStore()
-const route = useRoute()
-
-// TODO: optional fullscreen evaluate mode can be added by toggling a class that hides StudentNavigator.
-function syncRouteScript() {
-  const scriptId = route.params.scriptId
-  if (typeof scriptId === 'string' && scriptId) {
-    store.openScript(scriptId)
-  }
-}
-
-watch(() => route.params.scriptId, syncRouteScript)
-onMounted(syncRouteScript)
 </script>
 
 <template>

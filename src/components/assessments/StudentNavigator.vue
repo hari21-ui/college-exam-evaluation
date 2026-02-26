@@ -12,18 +12,11 @@ const chips: Array<{ label: string; value: 'all' | EvaluationStatus }> = [
   { label: 'Completed', value: 'completed' },
   { label: 'Locked', value: 'locked_by_other' },
 ]
-
-function quickSelect(studentId: string) {
-  collapsed.value = false
-  store.openStudent(studentId)
-}
 </script>
 
 <template>
   <aside :class="['card student-nav', { collapsed }]">
-    <button class="collapse-btn" :aria-label="collapsed ? 'Expand students panel' : 'Collapse students panel'" @click="collapsed = !collapsed">
-      {{ collapsed ? '›' : '‹' }}
-    </button>
+    <button class="collapse-btn" @click="collapsed = !collapsed">{{ collapsed ? '›' : '‹' }}</button>
     <template v-if="!collapsed">
       <input class="text-input" placeholder="Search Student ID" :value="store.studentSearch.value" @input="store.studentSearch.value = ($event.target as HTMLInputElement).value" />
       <div class="chips">
@@ -52,18 +45,5 @@ function quickSelect(studentId: string) {
         </button>
       </div>
     </template>
-
-    <div v-else class="collapsed-rail">
-      <button
-        v-for="student in store.filteredStudents.value"
-        :key="`dot-${student.id}`"
-        class="rail-dot"
-        :class="{ active: store.selectedStudentId.value === student.id }"
-        :title="student.id"
-        @click="quickSelect(student.id)"
-      >
-        <span :class="['dot', student.evaluationStatus]"></span>
-      </button>
-    </div>
   </aside>
 </template>

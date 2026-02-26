@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
 import { useAssessmentStore, type EvaluationStatus } from '../../stores/assessmentStore'
 
 const store = useAssessmentStore()
@@ -10,11 +9,6 @@ function evaluationLabel(status: EvaluationStatus) {
   if (status === 'in_progress' || status === 'locked_by_me') return 'In Progress'
   if (status === 'completed') return 'Completed'
   return 'Locked'
-}
-
-function goToEvaluation(scriptId: string) {
-  store.openScript(scriptId)
-  router.push(`/assessments/evaluate/${scriptId}`)
 }
 </script>
 
@@ -58,7 +52,7 @@ function goToEvaluation(scriptId: string) {
           <td><span :class="['status-pill', row.evaluationStatus]">{{ evaluationLabel(row.evaluationStatus) }}</span></td>
           <td>{{ row.totalMarks ? `${row.totalMarks} / 100` : '-' }}</td>
           <td>{{ row.lastUpdated ? new Date(row.lastUpdated).toLocaleDateString() : '-' }}</td>
-          <td><button class="btn-link" @click="goToEvaluation(row.id)">Start</button></td>
+          <td><button class="btn-link" @click="store.openStudent(row.studentId || '')">Start</button></td>
         </tr>
       </tbody>
     </table>

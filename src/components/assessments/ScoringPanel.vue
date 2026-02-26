@@ -27,10 +27,6 @@ const readOnly = computed(() => {
   return status === 'locked_by_other' || status === 'completed'
 })
 
-function isExpanded(questionNo: number) {
-  return store.activeQuestionNo.value === questionNo
-}
-
 function focusQuestion(questionNo: number) {
   store.setActiveQuestion(questionNo)
   nextTick(() => {
@@ -74,36 +70,33 @@ function questionLabel(questionNo: number) {
         v-for="question in store.questionPaper.value"
         :id="`question-${question.questionNo}`"
         :key="question.questionNo"
-        :class="['question-card', { active: isExpanded(question.questionNo) }]"
+        :class="['question-card', { active: store.activeQuestionNo.value === question.questionNo }]"
+        @click="focusQuestion(question.questionNo)"
       >
-        <div class="question-row" @click="focusQuestion(question.questionNo)">
+        <div class="question-row">
           <span class="subtle-q">Q{{ question.questionNo }}</span>
-          <p class="question-text">{{ isExpanded(question.questionNo) ? questionLabel(question.questionNo) : questionLabel(question.questionNo).slice(0, 42) + '…' }}</p>
-          <button class="accordion-toggle" @click.stop="focusQuestion(question.questionNo)">
-            {{ isExpanded(question.questionNo) ? '−' : '+' }}
-          </button>
+          <p class="question-text">{{ questionLabel(question.questionNo) }}</p>
         </div>
 
-        <div :class="['question-content', { expanded: isExpanded(question.questionNo) }]">
-          <div class="score-row">
-            <label class="marks-input-wrap">
-              <input
-                :id="`q-input-${question.questionNo}`"
-                class="text-input score-cell"
-                type="number"
-                min="0"
-                :max="question.maxMarks"
-                :disabled="!store.selectedStudent.value || readOnly"
-                :value="store.selectedStudent.value?.questions.find((q) => q.questionNo === question.questionNo)?.awardedMarks ?? ''"
-                @focus="focusQuestion(question.questionNo)"
-                @blur="commitScore(question.questionNo, question.maxMarks, ($event.target as HTMLInputElement).value, 'blur')"
-                @keydown.enter.prevent="commitScore(question.questionNo, question.maxMarks, ($event.target as HTMLInputElement).value, 'enter')"
-              />
-              <span class="max-label">/ {{ question.maxMarks }}</span>
-            </label>
-          </div>
-          <p v-if="fieldErrors[question.questionNo]" class="inline-error">{{ fieldErrors[question.questionNo] }}</p>
+        <div class="score-row">
+          <label class="marks-input-wrap">
+            <input
+              :id="`q-input-${question.questionNo}`"
+              class="text-input score-cell"
+              type="number"
+              min="0"
+              :max="question.maxMarks"
+              :disabled="!store.selectedStudent.value || readOnly"
+              :value="store.selectedStudent.value?.questions.find((q) => q.questionNo === question.questionNo)?.awardedMarks ?? ''"
+              @focus="focusQuestion(question.questionNo)"
+              @blur="commitScore(question.questionNo, question.maxMarks, ($event.target as HTMLInputElement).value, 'blur')"
+              @keydown.enter.prevent="commitScore(question.questionNo, question.maxMarks, ($event.target as HTMLInputElement).value, 'enter')"
+            />
+            <span class="max-label">/ {{ question.maxMarks }}</span>
+          </label>
         </div>
+
+        <p v-if="fieldErrors[question.questionNo]" class="inline-error">{{ fieldErrors[question.questionNo] }}</p>
       </div>
     </div>
 

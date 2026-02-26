@@ -46,7 +46,6 @@ const filters = reactive({ exam: 'All', batch: 'All', stream: 'All', subject: 'A
 const allScripts = ref<ScriptItem[]>([])
 const students = ref<StudentItem[]>([])
 const selectedStudentId = ref('')
-const selectedScriptId = ref('')
 const studentSearch = ref('')
 const studentStatusFilter = ref<'all' | EvaluationStatus>('all')
 const activeQuestionNo = ref(1)
@@ -272,21 +271,10 @@ function openStudent(studentId: string) {
   }
 
   selectedStudentId.value = studentId
-
-  const linkedScript = allScripts.value.find((item) => item.studentId === studentId)
-  if (linkedScript) selectedScriptId.value = linkedScript.id
-}
-
-function openScript(scriptId: string) {
-  const script = allScripts.value.find((item) => item.id === scriptId)
-  if (!script) return
-
-  selectedScriptId.value = script.id
-  if (script.studentId) openStudent(script.studentId)
 }
 
 function setActiveQuestion(questionNo: number) {
-  activeQuestionNo.value = Math.max(1, Math.min(questionPaper.value.length, questionNo))
+  activeQuestionNo.value = questionNo
 }
 
 let saveTimer: number | undefined
@@ -344,10 +332,8 @@ export function useAssessmentStore() {
     students,
     questionPaper,
     selectedStudent,
-    selectedScript,
     filteredStudents,
     selectedStudentId,
-    selectedScriptId,
     studentSearch,
     studentStatusFilter,
     activeQuestionNo,
@@ -360,7 +346,6 @@ export function useAssessmentStore() {
     removeUpload,
     removeSelectedUploads,
     openStudent,
-    openScript,
     setActiveQuestion,
     setScore,
     markCompleted,
