@@ -104,6 +104,8 @@ function questionLabel(questionNo: number) {
           </div>
           <p v-if="fieldErrors[question.questionNo]" class="inline-error">{{ fieldErrors[question.questionNo] }}</p>
         </div>
+
+        <p v-if="fieldErrors[question.questionNo]" class="inline-error">{{ fieldErrors[question.questionNo] }}</p>
       </div>
     </div>
 

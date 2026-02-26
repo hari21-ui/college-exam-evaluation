@@ -4,8 +4,6 @@ import workerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAssessmentStore } from '../../stores/assessmentStore'
 
-GlobalWorkerOptions.workerSrc = workerSrc
-
 const store = useAssessmentStore()
 const viewerEl = ref<HTMLElement | null>(null)
 const pageCanvases = ref<HTMLCanvasElement[]>([])
