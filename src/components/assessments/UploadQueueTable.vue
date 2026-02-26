@@ -2,6 +2,7 @@
 import { useAssessmentStore, type EvaluationStatus } from '../../stores/assessmentStore'
 
 const store = useAssessmentStore()
+const router = useRouter()
 
 function evaluationLabel(status: EvaluationStatus) {
   if (status === 'available') return 'Not Started'

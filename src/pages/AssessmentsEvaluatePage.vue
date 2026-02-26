@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import StudentNavigator from '../components/assessments/StudentNavigator.vue'
 import PdfViewer from '../components/assessments/PdfViewer.vue'
 import ScoringPanel from '../components/assessments/ScoringPanel.vue'

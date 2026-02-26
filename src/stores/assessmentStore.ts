@@ -252,6 +252,7 @@ const uploadCounters = computed(() => ({
 }))
 
 const selectedStudent = computed(() => students.value.find((student) => student.id === selectedStudentId.value))
+const selectedScript = computed(() => allScripts.value.find((script) => script.id === selectedScriptId.value))
 
 const filteredStudents = computed(() =>
   students.value.filter((student) => {
