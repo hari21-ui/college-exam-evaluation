@@ -1,17 +1,114 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
+import workerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAssessmentStore } from '../../stores/assessmentStore'
 
 const store = useAssessmentStore()
+const viewerEl = ref<HTMLElement | null>(null)
+const pageCanvases = ref<HTMLCanvasElement[]>([])
+const totalPages = ref(0)
 
-const mockPages = computed(() => [1, 2, 3, 4])
+const isSyncingFromScroll = ref(false)
+let framePending = false
+let lastMappedQuestion = 1
 
-const lineWidths = ['58%', '82%', '68%', '51%', '79%', '66%', '82%', '68%', '66%']
+const selectedPdfUrl = computed(() => {
+  const scriptName = store.selectedScript.value?.filename || ''
+  if (scriptName.toLowerCase() === 'biology.pdf') return '/Biology.pdf'
+  return '/sample.pdf'
+})
+
+async function renderPdf() {
+  if (!viewerEl.value || !store.selectedStudent.value) return
+  const loadingTask = getDocument(selectedPdfUrl.value)
+  const pdf = await loadingTask.promise
+
+  viewerEl.value.innerHTML = ''
+  pageCanvases.value = []
+  totalPages.value = pdf.numPages
+
+  for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+    const page = await pdf.getPage(pageNo)
+    const viewport = page.getViewport({ scale: 1.05 })
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) continue
+
+    canvas.className = 'pdf-page'
+    canvas.dataset.page = String(pageNo)
+    canvas.width = viewport.width
+    canvas.height = viewport.height
+
+    viewerEl.value.appendChild(canvas)
+    pageCanvases.value.push(canvas)
+    await page.render({ canvasContext: context, viewport }).promise
+  }
+
+  lastMappedQuestion = 1
+}
+
+function questionToPage(questionNo: number) {
+  if (!totalPages.value) return 1
+  return Math.max(1, Math.min(totalPages.value, Math.ceil((questionNo / store.questionPaper.value.length) * totalPages.value)))
+}
 
 function scrollToQuestion(questionNo: number) {
-  const targetPage = Math.max(1, Math.ceil((questionNo / store.questionPaper.value.length) * mockPages.value.length))
-  document.getElementById(`mock-page-${targetPage}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  const pageNo = questionToPage(questionNo)
+  pageCanvases.value[pageNo - 1]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
 }
+
+function onPdfScroll() {
+  if (framePending) return
+  framePending = true
+
+  window.requestAnimationFrame(() => {
+    framePending = false
+    const host = viewerEl.value
+    if (!host) return
+
+    const maxScroll = Math.max(1, host.scrollHeight - host.clientHeight)
+    const ratio = host.scrollTop / maxScroll
+    const mappedQuestion = Math.max(1, Math.min(store.questionPaper.value.length, Math.floor(ratio * store.questionPaper.value.length) + 1))
+    if (mappedQuestion === lastMappedQuestion || mappedQuestion === store.activeQuestionNo.value) return
+
+    lastMappedQuestion = mappedQuestion
+
+    isSyncingFromScroll.value = true
+    store.setActiveQuestion(mappedQuestion)
+  })
+}
+
+watch(
+  () => store.selectedStudent.value?.id,
+  async () => {
+    await nextTick()
+    await renderPdf()
+  },
+)
+
+watch(
+  () => selectedPdfUrl.value,
+  async () => {
+    await nextTick()
+    await renderPdf()
+  },
+)
+
+watch(
+  () => store.activeQuestionNo.value,
+  (questionNo) => {
+    if (isSyncingFromScroll.value) {
+      isSyncingFromScroll.value = false
+      return
+    }
+    scrollToQuestion(questionNo)
+  },
+)
+
+onMounted(async () => {
+  await renderPdf()
+})
 </script>
 
 <template>
@@ -31,14 +128,6 @@ function scrollToQuestion(questionNo: number) {
     </div>
 
     <div v-if="!store.selectedStudent.value" class="empty-state">Select a student from the left panel to open the answer sheet.</div>
-
-    <div v-else class="pdf-scroll-host">
-      <article v-for="pageNo in mockPages" :id="`mock-page-${pageNo}`" :key="pageNo" class="mock-page">
-        <span class="mock-page-no">Page {{ pageNo }}</span>
-        <div class="mock-lines">
-          <span v-for="(width, idx) in lineWidths" :key="`${pageNo}-${idx}`" class="mock-line" :style="{ width }"></span>
-        </div>
-      </article>
-    </div>
+    <div v-else ref="viewerEl" class="pdf-scroll-host" @scroll="onPdfScroll"></div>
   </section>
 </template>
