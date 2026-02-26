@@ -1,40 +1,110 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
 import { GlobalWorkerOptions, getDocument } from 'pdfjs-dist'
 import workerSrc from 'pdfjs-dist/build/pdf.worker.mjs?url'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useAssessmentStore } from '../../stores/assessmentStore'
 
 GlobalWorkerOptions.workerSrc = workerSrc
 
 const store = useAssessmentStore()
-const canvasEl = ref<HTMLCanvasElement | null>(null)
-const page = ref(1)
-const totalPages = ref(1)
-const scale = ref(1)
+const viewerEl = ref<HTMLElement | null>(null)
+const pageCanvases = ref<HTMLCanvasElement[]>([])
+const totalPages = ref(0)
+
+const isSyncingFromScroll = ref(false)
+let framePending = false
+let lastMappedQuestion = 1
+
+const selectedPdfUrl = computed(() => {
+  const scriptName = store.selectedScript.value?.filename || ''
+  if (scriptName.toLowerCase() === 'biology.pdf') return '/Biology.pdf'
+  return '/sample.pdf'
+})
 
 async function renderPdf() {
-  if (!store.selectedStudent.value || !canvasEl.value) return
-  const loadingTask = getDocument(store.selectedStudent.value ? '/sample.pdf' : '')
+  if (!viewerEl.value || !store.selectedStudent.value) return
+  const loadingTask = getDocument(selectedPdfUrl.value)
   const pdf = await loadingTask.promise
+
+  viewerEl.value.innerHTML = ''
+  pageCanvases.value = []
   totalPages.value = pdf.numPages
 
-  const currentPage = await pdf.getPage(page.value)
-  const viewport = currentPage.getViewport({ scale: scale.value })
-  const canvas = canvasEl.value
-  const context = canvas.getContext('2d')
-  if (!context) return
+  for (let pageNo = 1; pageNo <= pdf.numPages; pageNo += 1) {
+    const page = await pdf.getPage(pageNo)
+    const viewport = page.getViewport({ scale: 1.05 })
+    const canvas = document.createElement('canvas')
+    const context = canvas.getContext('2d')
+    if (!context) continue
 
-  canvas.height = viewport.height
-  canvas.width = viewport.width
+    canvas.className = 'pdf-page'
+    canvas.dataset.page = String(pageNo)
+    canvas.width = viewport.width
+    canvas.height = viewport.height
 
-  await currentPage.render({ canvasContext: context, viewport }).promise
+    viewerEl.value.appendChild(canvas)
+    pageCanvases.value.push(canvas)
+    await page.render({ canvasContext: context, viewport }).promise
+  }
+
+  lastMappedQuestion = 1
+}
+
+function questionToPage(questionNo: number) {
+  if (!totalPages.value) return 1
+  return Math.max(1, Math.min(totalPages.value, Math.ceil((questionNo / store.questionPaper.value.length) * totalPages.value)))
+}
+
+function scrollToQuestion(questionNo: number) {
+  const pageNo = questionToPage(questionNo)
+  pageCanvases.value[pageNo - 1]?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+}
+
+function onPdfScroll() {
+  if (framePending) return
+  framePending = true
+
+  window.requestAnimationFrame(() => {
+    framePending = false
+    const host = viewerEl.value
+    if (!host) return
+
+    const maxScroll = Math.max(1, host.scrollHeight - host.clientHeight)
+    const ratio = host.scrollTop / maxScroll
+    const mappedQuestion = Math.max(1, Math.min(store.questionPaper.value.length, Math.floor(ratio * store.questionPaper.value.length) + 1))
+    if (mappedQuestion === lastMappedQuestion || mappedQuestion === store.activeQuestionNo.value) return
+
+    lastMappedQuestion = mappedQuestion
+
+    isSyncingFromScroll.value = true
+    store.setActiveQuestion(mappedQuestion)
+  })
 }
 
 watch(
-  () => [store.selectedStudent.value?.id, page.value, scale.value],
+  () => store.selectedStudent.value?.id,
   async () => {
-    page.value = Math.min(page.value, totalPages.value)
+    await nextTick()
     await renderPdf()
+  },
+)
+
+watch(
+  () => selectedPdfUrl.value,
+  async () => {
+    await nextTick()
+    await renderPdf()
+  },
+)
+
+watch(
+  () => store.activeQuestionNo.value,
+  (questionNo) => {
+    if (isSyncingFromScroll.value) {
+      isSyncingFromScroll.value = false
+      return
+    }
+    scrollToQuestion(questionNo)
   },
 )
 
@@ -46,25 +116,20 @@ onMounted(async () => {
 <template>
   <section class="card viewer-panel">
     <div class="viewer-toolbar sticky">
-      <div>
-        <strong>{{ store.selectedStudent.value?.id || 'No student selected' }}</strong>
-        <span v-if="store.selectedStudent.value" :class="['lock-badge', store.selectedStudent.value.status === 'locked_by_other' ? 'danger' : 'primary']">
-          {{ store.selectedStudent.value.status === 'locked_by_other' ? `Locked by ${store.selectedStudent.value.lockedBy}` : 'Locked by you' }}
-        </span>
-      </div>
+      <strong>{{ store.selectedStudent.value?.id || 'No student selected' }}</strong>
       <div class="toolbar-actions">
-        <button class="btn secondary" :disabled="page <= 1" @click="page = Math.max(1, page - 1)">Prev</button>
-        <button class="btn secondary" :disabled="page >= totalPages" @click="page = Math.min(totalPages, page + 1)">Next</button>
-        <button class="btn secondary" @click="scale = Math.max(0.8, Number((scale - 0.1).toFixed(1)))">-</button>
-        <button class="btn secondary" @click="scale = Math.min(2, Number((scale + 0.1).toFixed(1)))">+</button>
-        <span>{{ page }}/{{ totalPages }}</span>
-        <span class="autosave">{{ store.autosave.state }}</span>
+        <button class="btn secondary" :disabled="!store.selectedStudent.value" @click="scrollToQuestion(Math.max(1, store.activeQuestionNo.value - 1))">↑</button>
+        <button
+          class="btn secondary"
+          :disabled="!store.selectedStudent.value"
+          @click="scrollToQuestion(Math.min(store.questionPaper.value.length, store.activeQuestionNo.value + 1))"
+        >
+          ↓
+        </button>
       </div>
     </div>
 
     <div v-if="!store.selectedStudent.value" class="empty-state">Select a student from the left panel to open the answer sheet.</div>
-    <div v-else class="canvas-wrap">
-      <canvas ref="canvasEl"></canvas>
-    </div>
+    <div v-else ref="viewerEl" class="pdf-scroll-host" @scroll="onPdfScroll"></div>
   </section>
 </template>

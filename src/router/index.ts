@@ -15,7 +15,7 @@ const router = createRouter({
         { path: 'dashboard', component: DummyPage, props: { title: 'Dashboard' } },
         { path: 'settings', component: DummyPage, props: { title: 'Settings' } },
         { path: 'assessments/upload', component: AssessmentsUploadPage },
-        { path: 'assessments/evaluate', component: AssessmentsEvaluatePage },
+        { path: 'assessments/evaluate/:scriptId?', component: AssessmentsEvaluatePage },
       ],
     },
   ],
